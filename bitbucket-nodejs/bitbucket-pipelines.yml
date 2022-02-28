@@ -1,0 +1,48 @@
+options:
+  docker: true
+  size: 2x
+
+pipelines:
+  branches:
+    master:
+      - step:
+          name: Publish image
+          script:
+            - export IMAGE_REPO=eastplayers/boiler-plate
+
+            - >- 
+              docker build 
+              -t $IMAGE_REPO:staging-0.1.$BITBUCKET_BUILD_NUMBER
+              -t $IMAGE_REPO:staging-latest
+              -f deployment/Dockerfile
+              .
+            - >-
+              docker login 
+              -u $DOCKER_HUB_USER
+              -p $DOCKER_HUB_PASSWORD
+            - docker push $IMAGE_REPO:staging-0.1.$BITBUCKET_BUILD_NUMBER
+            - docker push $IMAGE_REPO:staging-latest
+          services:
+            - docker
+          size: 2x
+      - step:
+          name: Deploy to Develop
+          image: eastplayers/bitbucket-kubectl
+          script:
+            - export NAMESPACE="staging"
+            - export SERVER_URL=${K8S_SERVER_URL}
+            - export TOKEN=${TOKEN}
+            - export IMAGE_NAME=eastplayers/boiler-plate:staging-0.1.$BITBUCKET_BUILD_NUMBER
+            - export DEPLOYMENT="boiler-plate"
+            - export CONTAINER_NAME="boiler-plate"
+
+            - curl https://raw.githubusercontent.com/Foxhound401/k8s-rollout-action/master/backup-entrypoint.sh > bitbucket-deploy.sh
+            - chmod +x ./bitbucket-deploy.sh
+            - >-
+              ./bitbucket-deploy.sh \
+                $SERVER_URL \
+                $TOKEN \
+                $DEPLOYMENT \
+                $IMAGE_NAME \
+                $NAMESPACE \
+                $CONTAINER_NAME
